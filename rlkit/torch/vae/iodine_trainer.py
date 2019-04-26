@@ -9,6 +9,7 @@ from rlkit.core.serializable import Serializable
 from rlkit.core.eval_util import create_stats_ordered_dict
 from rlkit.torch import pytorch_util as ptu
 from rlkit.torch.pytorch_util import from_numpy
+from tqdm import tqdm
 
 
 class IodineTrainer(Serializable):
@@ -110,7 +111,7 @@ class IodineTrainer(Serializable):
         log_probs = []
         kles = []
         mses = []
-        for batch_idx in range(batches):
+        for batch_idx in tqdm(range(batches)):
             if sample_batch is not None:
                 data = sample_batch(self.batch_size)
                 next_obs = data['next_obs']

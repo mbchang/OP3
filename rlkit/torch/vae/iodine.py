@@ -361,7 +361,7 @@ class IodineVAE(GaussianLatentVAE):
         x_hats = []
         masks = []
         for t in range(1, T + 1):
-            z = self.rsample_softplus(lambdas)
+            z = self.rsample_softplus(lambdas)  # (bs*K, hidden_size)
             x_hat, x_var_hat, m_hat_logit = self.decode(z)  # x_hat is (bs*K, 3, imsize, imsize) # TODO clamp x_hat between 0 and 1
             m_hat_logit = m_hat_logit.view(bs, K, self.imsize, self.imsize)
             mask = F.softmax(m_hat_logit, dim=1)
