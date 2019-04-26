@@ -1,3 +1,4 @@
+import argparse
 from torch import nn
 
 from rlkit.torch.vae.iodine import IodineVAE
@@ -63,12 +64,14 @@ def train_vae(variant):
     rep_size = variant['vae_kwargs']['representation_size']
    # t_sample = np.array([0, 0, 0, 0, 0, 10, 15, 20, 25, 30])
     t_sample = np.array([0, 0, 0, 34, 34])
-    train_data = train_data.reshape((n_frames, -1, 3, imsize, imsize)).swapaxes(0, 1)[:1000, t_sample]  # MC: note the 1000
-    test_data = test_data.reshape((n_frames, -1, 3, imsize, imsize)).swapaxes(0, 1)[:50, t_sample]
+    train_data = train_data.reshape((n_frames, -1, 3, imsize, imsize)).swapaxes(0, 1)[:variant['num_train'], t_sample]  # MC: note the 1000
+    test_data = test_data.reshape((n_frames, -1, 3, imsize, imsize)).swapaxes(0, 1)[:variant['num_test'], t_sample]
     print('train data shape: {}'.format(train_data.shape))
     print('test_data shape: {}'.format(test_data.shape))
     #logger.save_extra_data(info)
-    logger.get_snapshot_dir()
+    snapshot_dir = logger.get_snapshot_dir()
+    print('Logging to {}'.format(snapshot_dir))
+    assert False
     # variant['vae_kwargs']['architecture'] = iodine.imsize64_large_iodine_architecture
     variant['vae_kwargs']['architecture'] = iodine.imsize64_iodine_architecture
     variant['vae_kwargs']['decoder_class'] = BroadcastCNN
@@ -105,8 +108,22 @@ def train_vae(variant):
         #    t.dump_samples(epoch)
     logger.save_extra_data(m, 'vae.pkl', mode='pickle')
 
+def process_args(args):
+    if args.debug:
+        args.num_train = 50
+        args.num_test = 10
+    return args
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--num-train', type=int, default=1000)
+    parser.add_argument('--num-test', type=int, default=50)
+    parser.add_argument('--batch-size', type=int, default=8)
+    parser.add_argument('--debug', action='store_true')
+    args = parser.parse_args()
+    args = process_args(args)
+
     variant = dict(
         vae_kwargs = dict(
             imsize=64,
@@ -119,14 +136,16 @@ if __name__ == "__main__":
         ),
         algo_kwargs = dict(
             gamma=0.5,
-            batch_size=8,
+            batch_size=args.batch_size,
             lr=1e-4,
             log_interval=0,
         ),
         num_epochs=10000,
         algorithm='VAE',
         save_period=5,
-        physics=True
+        physics=True,
+        num_train=args.num_train,
+        num_test=args.num_test,
     )
 
     run_experiment(
@@ -134,6 +153,7 @@ if __name__ == "__main__":
         exp_prefix='iodine-balls-physics',
         mode='here_no_doodad',
         variant=variant,
+        seed=args.seed,
         # use_gpu=True,  # Turn on if you have a GPU
         use_gpu=False,  # Turn on if you have a GPU
     )
