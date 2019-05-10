@@ -19,6 +19,7 @@ from rlkit.core import logger
 import numpy as np
 from scipy import misc
 import h5py
+import os
 
 def load_dataset(data_path, train=True):
     mode = 'training' if train else 'validation'
@@ -40,38 +41,60 @@ def load_dataset(data_path, train=True):
         data = np.swapaxes(data, 2, 3)
         return data
 
+def extract_max_k_from_fname(fname):
+    start = fname.find('n-')+2
+    end = fname.find('_m-')
+    substring = fname[start:end]
+    ks = map(int, substring.split('-'))
+    max_k = max(ks)
+    return max_k
+
+def extract_nframe_from_fname(fname):
+    start = fname.find('nf-')+3
+    end = fname.find('.h5')
+    substring = fname[start:end]
+    nf = int(substring)
+    return nf
+
 
 def train_vae(variant):
-    #train_path = '/home/jcoreyes/objects/rlkit/examples/monet/clevr_train.hdf5'
-    #test_path = '/home/jcoreyes/objects/rlkit/examples/monet/clevr_test.hdf5'
+    local_root = '/Users/michaelchang/Documents/Researchlink/Berkeley/rnem_plan/DataGeneration'
+    remote_root = '/home/mbchang/Documents/research/rnem-plan/DataGeneration'
+    root = local_root if variant['local'] else remote_root
+    # train_data_h5 = 'Balls_n-3-4-6_m-1_r-4-6_c--1c_ns-10000_nf-31.h5'
+    # test_data_h5 = 'Balls_n-3-4-6_m-1_r-4-6_c--1c_ns-10000_nf-31.h5'
 
-    # train_path = '/home/jcoreyes/objects/RailResearch/DataGeneration/ColorBigTwoBallSmall.h5'  # MC: will use
-    # test_path = '/home/jcoreyes/objects/RailResearch/DataGeneration/ColorBigTwoBallSmall.h5'  # MC: will use
+    # debug
+    train_data_h5 = 'Balls_n-6_m-1_r-3_c--1_ns-10_nf-61.h5'
+    test_data_h5 = 'Balls_n-6_m-1_r-3_c--1_ns-10_nf-61.h5'
 
-    train_path = '/Users/michaelchang/Documents/Researchlink/Berkeley/rnem_plan/DataGeneration/Balls_n-2_m-1_r-7_c-8_ns-1000.h5'  # MC: will use
-    test_path = '/Users/michaelchang/Documents/Researchlink/Berkeley/rnem_plan/DataGeneration/Balls_n-2_m-1_r-7_c-8_ns-1000.h5'  # MC: will use
+    file_max_k = extract_max_k_from_fname(train_data_h5)
+    assert file_max_k + 1 == variant['vae_kwargs']['K']
 
-    # train_path = '/home/jcoreyes/objects/RailResearch/BlocksGeneration/rendered/fiveBlock.h5'
-    # test_path = '/home/jcoreyes/objects/RailResearch/BlocksGeneration/rendered/fiveBlock.h5'
+    train_path = os.path.join(root, train_data_h5)
+    test_path = os.path.join(root, test_data_h5)
+    print('train path: {}'.format(train_path))
+    print('test path: {}'.format(test_path))
 
     train_data = load_dataset(train_path, train=True)
     test_data = load_dataset(test_path, train=False)
 
-    n_frames = 51
+    n_frames = extract_nframe_from_fname(train_data_h5)
     imsize = train_data.shape[-1]
     T = variant['vae_kwargs']['T']
     K = variant['vae_kwargs']['K']
     rep_size = variant['vae_kwargs']['representation_size']
    # t_sample = np.array([0, 0, 0, 0, 0, 10, 15, 20, 25, 30])
-    t_sample = np.array([0, 0, 0, 34, 34])
-    train_data = train_data.reshape((n_frames, -1, 3, imsize, imsize)).swapaxes(0, 1)[:variant['num_train'], t_sample]  # MC: note the 1000
+    # t_sample = np.array([0, 0, 0, 34, 34])  # aha
+    t_sample = np.array(range(0, T*variant['subsample'], variant['subsample'])) # can consider subsampling
+    print(t_sample)
+    train_data = train_data.reshape((n_frames, -1, 3, imsize, imsize)).swapaxes(0, 1)[:variant['num_train'], t_sample]
     test_data = test_data.reshape((n_frames, -1, 3, imsize, imsize)).swapaxes(0, 1)[:variant['num_test'], t_sample]
     print('train data shape: {}'.format(train_data.shape))
     print('test_data shape: {}'.format(test_data.shape))
     #logger.save_extra_data(info)
     snapshot_dir = logger.get_snapshot_dir()
     print('Logging to {}'.format(snapshot_dir))
-    assert False
     # variant['vae_kwargs']['architecture'] = iodine.imsize64_large_iodine_architecture
     variant['vae_kwargs']['architecture'] = iodine.imsize64_iodine_architecture
     variant['vae_kwargs']['decoder_class'] = BroadcastCNN
@@ -106,21 +129,27 @@ def train_vae(variant):
                      save_reconstruction=should_save_imgs)
         #if should_save_imgs:
         #    t.dump_samples(epoch)
-    logger.save_extra_data(m, 'vae.pkl', mode='pickle')
+    logger.save_extra_data(m, 'vae.pkl', mode='pickle')  # TODO
 
 def process_args(args):
     if args.debug:
         args.num_train = 50
         args.num_test = 10
+    args.use_gpu = not args.local
     return args
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--num-train', type=int, default=1000)
+    parser.add_argument('--num-train', type=int, default=10000)
     parser.add_argument('--num-test', type=int, default=50)
     parser.add_argument('--batch-size', type=int, default=8)
+    parser.add_argument('--k', type=int, default=7)
+    parser.add_argument('--seqlength', type=int, default=20)
+    parser.add_argument('--subsample', type=int, default=3)
     parser.add_argument('--debug', action='store_true')
+    parser.add_argument('--local', action='store_true')
+    parser.add_argument('--exp-prefix', type=str, default='iodine-balls-physics')
     args = parser.parse_args()
     args = process_args(args)
 
@@ -131,8 +160,8 @@ if __name__ == "__main__":
             input_channels=3,
             decoder_distribution='gaussian_identity_variance',
             beta=1,
-            K=3,  # MC: will change
-            T=5,
+            K=args.k,  # MC: will change
+            T=args.seqlength,
         ),
         algo_kwargs = dict(
             gamma=0.5,
@@ -142,20 +171,21 @@ if __name__ == "__main__":
         ),
         num_epochs=10000,
         algorithm='VAE',
-        save_period=5,
+        save_period=10,
         physics=True,
         num_train=args.num_train,
         num_test=args.num_test,
+        subsample=args.subsample,
+        local=args.local
     )
 
     run_experiment(
         train_vae,
-        exp_prefix='iodine-balls-physics',
+        exp_prefix=args.exp_prefix,
         mode='here_no_doodad',
         variant=variant,
         seed=args.seed,
-        # use_gpu=True,  # Turn on if you have a GPU
-        use_gpu=False,  # Turn on if you have a GPU
+        use_gpu=args.use_gpu,  # Turn on if you have a GPU
     )
 
 

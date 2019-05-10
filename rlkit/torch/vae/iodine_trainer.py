@@ -105,7 +105,7 @@ class IodineTrainer(Serializable):
         Y = Y[ind, :]
         return ptu.from_numpy(X), ptu.from_numpy(Y)
 
-    def train_epoch(self, epoch, sample_batch=None, batches=20, from_rl=False):
+    def train_epoch(self, epoch, sample_batch=None, batches=20, from_rl=False, seedsteps=1000):
         self.model.train()
         losses = []
         log_probs = []
@@ -118,7 +118,7 @@ class IodineTrainer(Serializable):
             else:
                 next_obs = self.get_batch()
             self.optimizer.zero_grad()
-            x_hat, mask, loss, kle_loss, x_prob_loss, mse, final_recon = self.model(next_obs, seedsteps=11)
+            x_hat, mask, loss, kle_loss, x_prob_loss, mse, final_recon = self.model(next_obs, seedsteps=seedsteps)
             loss.backward()
             torch.nn.utils.clip_grad_norm_([x for x in self.model.parameters()] + self.model.lambdas, 5.0)
             #torch.nn.utils.clip_grad_norm_(self.model.lambdas, 5.0)  # TODO Clip other gradients?
@@ -155,7 +155,8 @@ class IodineTrainer(Serializable):
             from_rl=False,
             record_stats=True,
             train=True,
-            batches=1
+            batches=1,
+            seedsteps=1000
     ):
 
         self.model.eval() #TODO Get around needing gradients during eval mode
@@ -167,7 +168,7 @@ class IodineTrainer(Serializable):
             self.optimizer.zero_grad()
             next_obs = self.get_batch(train=train)
             T = next_obs.shape[1]
-            x_hats, masks, loss, kle_loss, x_prob_loss, mse, final_recon = self.model(next_obs, seedsteps=3)
+            x_hats, masks, loss, kle_loss, x_prob_loss, mse, final_recon = self.model(next_obs, seedsteps=seedsteps)
 
             losses.append(loss.item())
             log_probs.append(x_prob_loss.item())
