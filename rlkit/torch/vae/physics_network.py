@@ -34,27 +34,29 @@ class PhysicsNetwork(PyTorchModule):
         # input is (bs*K, representation_size)
         K = self.K
         rep_size = self.rep_size
-        lambdas = input.view(-1, K, rep_size)
-        bs = lambdas.shape[0]
+        if K == 1:
+            return input
+        else:
+            lambdas = input.view(-1, K, rep_size)
+            bs = lambdas.shape[0]
 
-        pairs = []
-        for i in range(K):
-            for j in range(K):
-                if i == j:
-                    continue
-                pairs.append(torch.cat([lambdas[:, i], lambdas[:, j]], -1))
+            pairs = []
+            for i in range(K):
+                for j in range(K):
+                    if i == j:
+                        continue
+                    pairs.append(torch.cat([lambdas[:, i], lambdas[:, j]], -1))
 
-        all_pairs = torch.stack(pairs, 1).view(bs*K,  K-1, -1)
+            all_pairs = torch.stack(pairs, 1).view(bs*K,  K-1, -1)
 
-        interaction = self.embedding_network(all_pairs)
-        effect = self.effect_network(interaction)
+            interaction = self.embedding_network(all_pairs)
+            effect = self.effect_network(interaction)
 
-        attention = self.attention_network(interaction)
+            attention = self.attention_network(interaction)
 
-        total_effect = (attention * effect).view(bs*K, (K-1), -1).sum(1) # TODO check this is right
+            total_effect = (attention * effect).view(bs*K, (K-1), -1).sum(1) # TODO check this is right
 
-        new_lambdas = self.encoder_network(total_effect)
-
+            new_lambdas = self.encoder_network(total_effect)
         return new_lambdas
 
     def initialize_hidden(self, bs):
