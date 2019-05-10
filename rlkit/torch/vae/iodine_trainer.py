@@ -17,6 +17,12 @@ class IodineTrainer(Serializable):
             self,
             train_dataset,
             test_dataset,
+            ##########
+            train_preprocessor,
+            test_preprocessor,
+
+
+            ##########
             model,
             batch_size=128,
             log_interval=0,
@@ -47,11 +53,14 @@ class IodineTrainer(Serializable):
         params = list(self.model.parameters()) + self.model.lambdas
         self.optimizer = optim.Adam(params, lr=self.lr)
         self.train_dataset, self.test_dataset = train_dataset, test_dataset
-        assert self.train_dataset.dtype == np.uint8
-        assert self.test_dataset.dtype == np.uint8
+        # assert self.train_dataset.dtype == np.uint8  # WARNING
+        # assert self.test_dataset.dtype == np.uint8  # WARNING
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
-
+        ##########
+        self.train_preprocessor = train_preprocessor
+        self.test_preprocessor = test_preprocessor
+        ########## 
         self.batch_size = batch_size
 
         self.normalize = normalize
@@ -88,9 +97,35 @@ class IodineTrainer(Serializable):
         return ptu.get_numpy((error ** 2).sum(dim=1))
 
     def get_batch(self, train=True):
+        """
+            raw: (61, 10, 64, 64, 3) : (T, B, H, W, C)
+            preprocessed: (10, 20, 3, 64, 64) : (B, T/S, C, H, W)
+        """
+
         dataset = self.train_dataset if train else self.test_dataset
-        ind = np.random.randint(0, len(dataset), self.batch_size)
-        samples = normalize_image(dataset[ind, :])
+        preprocessor = self.train_preprocessor if train else self.test_preprocessor
+        mode = 'training' if train else 'validation'
+
+        # print(dataset[mode]['features'].shape)
+        N = dataset[mode]['features'].shape[1]  # this would be total_samples
+
+        ###############
+        # option A
+        # ind = np.random.randint(0, N, self.batch_size)
+        # dataset = np.array(dataset[mode]['features'])
+        # batch = dataset[:, ind]
+        # option B
+        # ind = np.random.randint(0, N-self.batch_size)
+        # dataset = np.array(dataset[mode]['features'])
+        # batch = dataset[:, ind:ind+self.batch_size]
+        # option C
+        ind = np.random.randint(0, N-self.batch_size)
+        batch = np.array(dataset[mode]['features'][:, ind:ind+self.batch_size])
+        ###############
+
+        batch = preprocessor.preprocess(batch)  # note the max_samples!
+
+        samples = normalize_image(batch)
         if self.normalize:
             samples = ((samples - self.train_data_mean) + 1) / 2
         if self.background_subtract:
@@ -117,20 +152,22 @@ class IodineTrainer(Serializable):
                 next_obs = data['next_obs']
             else:
                 next_obs = self.get_batch()
-            self.optimizer.zero_grad()
-            x_hat, mask, loss, kle_loss, x_prob_loss, mse, final_recon = self.model(next_obs, seedsteps=seedsteps)
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_([x for x in self.model.parameters()] + self.model.lambdas, 5.0)
-            #torch.nn.utils.clip_grad_norm_(self.model.lambdas, 5.0)  # TODO Clip other gradients?
-            self.optimizer.step()
+            import time
+            time.sleep(0.1)
+            # self.optimizer.zero_grad()
+            # x_hat, mask, loss, kle_loss, x_prob_loss, mse, final_recon = self.model(next_obs, seedsteps=seedsteps)
+            # loss.backward()
+            # torch.nn.utils.clip_grad_norm_([x for x in self.model.parameters()] + self.model.lambdas, 5.0)
+            # #torch.nn.utils.clip_grad_norm_(self.model.lambdas, 5.0)  # TODO Clip other gradients?
+            # self.optimizer.step()
 
-            losses.append(loss.item())
-            log_probs.append(x_prob_loss.item())
-            kles.append(kle_loss.item())
-            mses.append(mse.item())
+            # losses.append(loss.item())
+            # log_probs.append(x_prob_loss.item())
+            # kles.append(kle_loss.item())
+            # mses.append(mse.item())
 
-            if self.log_interval and batch_idx % self.log_interval == 0:
-                print(x_prob_loss.item(), kle_loss.item())
+            # if self.log_interval and batch_idx % self.log_interval == 0:
+            #     print(x_prob_loss.item(), kle_loss.item())
 
 
         if from_rl:
