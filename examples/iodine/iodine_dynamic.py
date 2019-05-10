@@ -22,24 +22,9 @@ import h5py
 import os
 
 class Preprocessor():
-    def __init__(self, t_sample, n_frames, total_samples):
+    def __init__(self, t_sample, N):
         self.t_sample = t_sample
-        self.n_frames = n_frames
-        self.total_samples = total_samples
-
-    def old_preprocess(self, data):
-        """
-            (61, 10, 64, 64, 3): (T, N, H, W, C)
-
-        """
-        data = data.reshape((-1, 64, 64, 3))
-        data = (data * 255).astype(np.uint8)
-        data = np.swapaxes(data, 1, 3)
-        imsize = data.shape[-1]
-        data = data.reshape((self.n_frames, -1, 3, imsize, imsize)).swapaxes(0, 1)
-        # data = data[:self.total_samples, self.t_sample]
-        data = data[:, self.t_sample]
-        return data
+        self.N = N
 
     def preprocess(self, data):
         """
@@ -60,17 +45,14 @@ def load_dataset(data_path, train=True):
     if 'clevr' in data_path:
         return np.array(hdf5_file['features'])
     elif 'Ball' in data_path:
+        ################
         # feats = np.array(hdf5_file[mode]['features'])
         # print('{} feats'.format(mode))
         # print(feats.shape)
         # return feats
-
-
+        ################
         return hdf5_file
-
-
-
-
+        ################
     elif 'BlocksGeneration' in data_path:
         feats = np.array(hdf5_file[mode]['features'])
         data = feats.reshape((-1, 64, 64, 3))
@@ -130,17 +112,10 @@ def train_vae(variant):
     print(t_sample)
 
     train_data = load_dataset(train_path, train=True)
-    train_data_preprocessor = Preprocessor(t_sample, n_frames, variant['num_train'])
-    # train_data = train_data_preprocessor.preprocess(train_data)
-    # print('data shape: {}'.format(train_data.shape))
+    train_data_preprocessor = Preprocessor(t_sample, variant['num_train'])
 
     test_data = load_dataset(test_path, train=False)
-    test_data_preprocessor = Preprocessor(t_sample, n_frames, variant['num_test'])
-    # test_data = test_data_preprocessor.preprocess(test_data)
-    # print('data shape: {}'.format(test_data.shape))
-
-    # variant['test_preprocessor'] = test_data_preprocessor
-    # variant['train_preprocessor'] = train_data_preprocessor
+    test_data_preprocessor = Preprocessor(t_sample, variant['num_test'])
 
     #logger.save_extra_data(info)
     snapshot_dir = logger.get_snapshot_dir()
@@ -178,12 +153,6 @@ def train_vae(variant):
     save_period = variant['save_period']
     for epoch in range(variant['num_epochs']):
         should_save_imgs = (epoch % save_period == 0)
-
-        # print(train_data.shape[0]//variant['algo_kwargs']['batch_size'])
-        # assert False
-
-
-        # t.train_epoch(epoch, batches=train_data.shape[0]//variant['algo_kwargs']['batch_size'])
         t.train_epoch(epoch)
         t.test_epoch(epoch, save_vae=True, train=False, record_stats=True, batches=1,
                      save_reconstruction=should_save_imgs)
