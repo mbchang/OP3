@@ -20,8 +20,6 @@ class IodineTrainer(Serializable):
             ##########
             train_preprocessor,
             test_preprocessor,
-
-
             ##########
             model,
             batch_size=128,
@@ -57,10 +55,8 @@ class IodineTrainer(Serializable):
         # assert self.test_dataset.dtype == np.uint8  # WARNING
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
-        ##########
         self.train_preprocessor = train_preprocessor
-        self.test_preprocessor = test_preprocessor
-        ########## 
+        self.test_preprocessor = test_preprocessor 
         self.batch_size = batch_size
 
         self.normalize = normalize
@@ -106,15 +102,17 @@ class IodineTrainer(Serializable):
         mode = 'training' if train else 'validation'
         N = min(dataset[mode]['features'].shape[1], preprocessor.N)  # this would be total_samples
         ###############
-        # option A
+        # option A: very slow
         # ind = np.random.randint(0, N, self.batch_size)
         # dataset = np.array(dataset[mode]['features'])
         # batch = dataset[:, ind]
-        # option B
+
+        # option B: very slow
         # ind = np.random.randint(0, N-self.batch_size)
         # dataset = np.array(dataset[mode]['features'])
         # batch = dataset[:, ind:ind+self.batch_size]
-        # option C
+
+        # option C: very fast
         ind = np.random.randint(0, N-self.batch_size)
         batch = np.array(dataset[mode]['features'][:, ind:ind+self.batch_size])
         ###############
@@ -147,22 +145,20 @@ class IodineTrainer(Serializable):
                 next_obs = data['next_obs']
             else:
                 next_obs = self.get_batch()
-            import time
-            time.sleep(0.1)
-            # self.optimizer.zero_grad()
-            # x_hat, mask, loss, kle_loss, x_prob_loss, mse, final_recon = self.model(next_obs, seedsteps=seedsteps)
-            # loss.backward()
-            # torch.nn.utils.clip_grad_norm_([x for x in self.model.parameters()] + self.model.lambdas, 5.0)
-            # #torch.nn.utils.clip_grad_norm_(self.model.lambdas, 5.0)  # TODO Clip other gradients?
-            # self.optimizer.step()
+            self.optimizer.zero_grad()
+            x_hat, mask, loss, kle_loss, x_prob_loss, mse, final_recon = self.model(next_obs, seedsteps=seedsteps)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_([x for x in self.model.parameters()] + self.model.lambdas, 5.0)
+            #torch.nn.utils.clip_grad_norm_(self.model.lambdas, 5.0)  # TODO Clip other gradients?
+            self.optimizer.step()
 
-            # losses.append(loss.item())
-            # log_probs.append(x_prob_loss.item())
-            # kles.append(kle_loss.item())
-            # mses.append(mse.item())
+            losses.append(loss.item())
+            log_probs.append(x_prob_loss.item())
+            kles.append(kle_loss.item())
+            mses.append(mse.item())
 
-            # if self.log_interval and batch_idx % self.log_interval == 0:
-            #     print(x_prob_loss.item(), kle_loss.item())
+            if self.log_interval and batch_idx % self.log_interval == 0:
+                print(x_prob_loss.item(), kle_loss.item())
 
 
         if from_rl:
@@ -199,32 +195,29 @@ class IodineTrainer(Serializable):
         for batch_idx in range(batches):
             self.optimizer.zero_grad()
             next_obs = self.get_batch(train=train)
-            import time
-            time.sleep(0.1)
+            T = next_obs.shape[1]
+            x_hats, masks, loss, kle_loss, x_prob_loss, mse, final_recon = self.model(next_obs, seedsteps=seedsteps)
 
-            # T = next_obs.shape[1]
-            # x_hats, masks, loss, kle_loss, x_prob_loss, mse, final_recon = self.model(next_obs, seedsteps=seedsteps)
-
-            # losses.append(loss.item())
-            # log_probs.append(x_prob_loss.item())
-            # kles.append(kle_loss.item())
-            # mses.append(mse.item())
+            losses.append(loss.item())
+            log_probs.append(x_prob_loss.item())
+            kles.append(kle_loss.item())
+            mses.append(mse.item())
 
 
-            # if batch_idx == 0 and save_reconstruction:
-            #     ground_truth = next_obs[0].unsqueeze(0)
-            #     K = self.model.K
-            #     imsize = ground_truth.shape[-1]
+            if batch_idx == 0 and save_reconstruction:
+                ground_truth = next_obs[0].unsqueeze(0)
+                K = self.model.K
+                imsize = ground_truth.shape[-1]
 
-            #     m = torch.stack([m[0] for m in masks]).permute(1, 0, 2, 3).unsqueeze(2).repeat(1, 1, 3, 1, 1) # K, T, 3, imsize, imsize
-            #     x = torch.stack(x_hats)[:, :K].permute(1, 0, 2, 3, 4)
-            #     rec = (m * x)
-            #     full_rec = rec.sum(0, keepdim=True)
-            #     comparison = torch.cat([ground_truth, full_rec, m, x], 0).view(-1, 3, imsize, imsize)
+                m = torch.stack([m[0] for m in masks]).permute(1, 0, 2, 3).unsqueeze(2).repeat(1, 1, 3, 1, 1) # K, T, 3, imsize, imsize
+                x = torch.stack(x_hats)[:, :K].permute(1, 0, 2, 3, 4)
+                rec = (m * x)
+                full_rec = rec.sum(0, keepdim=True)
+                comparison = torch.cat([ground_truth, full_rec, m, x], 0).view(-1, 3, imsize, imsize)
 
-            #     save_dir = osp.join(logger.get_snapshot_dir(),
-            #                         '%s_r%d.png' % ('train' if train else 'val', epoch))
-            #     save_image(comparison.data.cpu(), save_dir, nrow=T)
+                save_dir = osp.join(logger.get_snapshot_dir(),
+                                    '%s_r%d.png' % ('train' if train else 'val', epoch))
+                save_image(comparison.data.cpu(), save_dir, nrow=T)
 
 
 

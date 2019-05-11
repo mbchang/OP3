@@ -45,14 +45,7 @@ def load_dataset(data_path, train=True):
     if 'clevr' in data_path:
         return np.array(hdf5_file['features'])
     elif 'Ball' in data_path:
-        ################
-        # feats = np.array(hdf5_file[mode]['features'])
-        # print('{} feats'.format(mode))
-        # print(feats.shape)
-        # return feats
-        ################
         return hdf5_file
-        ################
     elif 'BlocksGeneration' in data_path:
         feats = np.array(hdf5_file[mode]['features'])
         data = feats.reshape((-1, 64, 64, 3))
@@ -81,17 +74,16 @@ def train_vae(variant):
     local_root = '/Users/michaelchang/Documents/Researchlink/Berkeley/rnem_plan/DataGeneration'
     remote_root = '/home/mbchang/Documents/research/rnem-plan/DataGeneration'
     root = local_root if variant['local'] else remote_root
-    # train_data_h5 = 'Balls_n-3-4-6_m-1_r-4-6_c--1c_ns-10000_nf-31.h5'
-    # test_data_h5 = 'Balls_n-3-4-6_m-1_r-4-6_c--1c_ns-10000_nf-31.h5'
 
-    # # debug
+    # debug
     if variant['debug']:
-
         # train_data_h5 = 'Balls_n-6_m-1_r-3_c--1_ns-10_nf-61.h5'
         # test_data_h5 = 'Balls_n-6_m-1_r-3_c--1_ns-10_nf-61.h5'
         train_data_h5 = 'Balls_n-6_m-1_r-3_c--1_ns-1000_nf-61.h5'
         test_data_h5 = 'Balls_n-6_m-1_r-3_c--1_ns-1000_nf-61.h5'
     else:
+        # train_data_h5 = 'Balls_n-3-4-6_m-1_r-4-6_c--1c_ns-10000_nf-31.h5'
+        # test_data_h5 = 'Balls_n-3-4-6_m-1_r-4-6_c--1c_ns-10000_nf-31.h5'
         train_data_h5 = 'Balls_n-3-4-6_m-1_r-4-6_c--1_ns-10000_nf-61.h5'
         test_data_h5 = 'Balls_n-3-4-6_m-1_r-4-6_c--1_ns-10000_nf-61.h5'
 
@@ -107,7 +99,7 @@ def train_vae(variant):
     T = variant['vae_kwargs']['T']
     K = variant['vae_kwargs']['K']
     # t_sample = np.array([0, 0, 0, 0, 0, 10, 15, 20, 25, 30])
-    # t_sample = np.array([0, 0, 0, 34, 34])  # aha
+    # t_sample = np.array([0, 0, 0, 34, 34])
     t_sample = np.array(range(0, T*variant['subsample'], variant['subsample'])) # can consider subsampling
     print(t_sample)
 
@@ -140,7 +132,7 @@ def train_vae(variant):
         physics_net=physics_net,
 
     )
-    # print(m)
+    print(m)
 
     m.to(ptu.device)
     t = IodineTrainer(train_data, test_data, 
@@ -153,7 +145,7 @@ def train_vae(variant):
     save_period = variant['save_period']
     for epoch in range(variant['num_epochs']):
         should_save_imgs = (epoch % save_period == 0)
-        t.train_epoch(epoch)
+        t.train_epoch(epoch, batches=625)
         t.test_epoch(epoch, save_vae=True, train=False, record_stats=True, batches=1,
                      save_reconstruction=should_save_imgs)
         t.test_epoch(epoch, save_vae=False, train=True, record_stats=False, batches=1,
@@ -174,7 +166,7 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--num-train', type=int, default=10000)
     parser.add_argument('--num-test', type=int, default=50)
-    parser.add_argument('--batch-size', type=int, default=8)
+    parser.add_argument('--batch-size', type=int, default=12)
     parser.add_argument('--k', type=int, default=7)
     parser.add_argument('--seqlength', type=int, default=20)
     parser.add_argument('--subsample', type=int, default=3)
